@@ -1,6 +1,7 @@
 import type { LiquidGLOptions } from "liquid-gl";
 
 const initializedTargets = new WeakSet<Element>();
+const initializingTargets = new WeakMap<Element, Promise<void>>();
 
 type InitializeLiquidGlassOptions = {
   target: Element;
@@ -51,14 +52,10 @@ function createOptions(targetSelector: string): LiquidGLOptions {
  * mounted for the lifetime of the app. The WeakSet also prevents React
  * StrictMode from creating a duplicate lens during development.
  */
-export async function initializeLiquidGlass({
+async function initializeTarget({
   target,
   targetSelector,
 }: InitializeLiquidGlassOptions) {
-  if (initializedTargets.has(target)) {
-    return;
-  }
-
   await waitForPageAssets();
 
   if (!target.isConnected || initializedTargets.has(target)) {
@@ -73,4 +70,60 @@ export async function initializeLiquidGlass({
 
   liquidGL(createOptions(targetSelector));
   initializedTargets.add(target);
+}
+
+export async function initializeLiquidGlass(
+  options: InitializeLiquidGlassOptions,
+) {
+  if (initializedTargets.has(options.target)) {
+    return;
+  }
+
+  const pendingInitialization = initializingTargets.get(options.target);
+
+  if (pendingInitialization) {
+    await pendingInitialization;
+    return;
+  }
+
+  const initialization = initializeTarget(options);
+  initializingTargets.set(options.target, initialization);
+
+  try {
+    await initialization;
+  } finally {
+    if (initializingTargets.get(options.target) === initialization) {
+      initializingTargets.delete(options.target);
+    }
+  }
+}
+
+/**
+ * Refreshes the captured page behind an existing lens after SPA navigation.
+ *
+ * liquidGL only observes size changes by default. Routes with similar document
+ * heights can otherwise keep rendering the previous page in the glass texture.
+ */
+export async function refreshLiquidGlassSnapshot(target: Element) {
+  const pendingInitialization = initializingTargets.get(target);
+
+  if (pendingInitialization) {
+    await pendingInitialization;
+  }
+
+  if (!target.isConnected || !initializedTargets.has(target)) {
+    return;
+  }
+
+  await waitForPageAssets();
+
+  if (!target.isConnected) {
+    return;
+  }
+
+  const { default: liquidGL } = await import("liquid-gl");
+
+  // Passing an empty collection uses liquidGL's public refresh path without
+  // registering route content as a permanently dynamic element.
+  liquidGL.registerDynamic([]);
 }

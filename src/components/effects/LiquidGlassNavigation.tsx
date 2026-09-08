@@ -1,7 +1,10 @@
 import { useEffect, useRef } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 
-import { initializeLiquidGlass } from "@/lib/liquidGlass";
+import {
+  initializeLiquidGlass,
+  refreshLiquidGlassSnapshot,
+} from "@/lib/liquidGlass";
 import { routes } from "@/routes/routes";
 
 const TARGET_ID = "levelup-liquid-navigation";
@@ -25,7 +28,9 @@ function getLinkClasses({ isActive }: { isActive: boolean }) {
  * API, so remounting targets would retain stale lenses in its shared renderer.
  */
 export function LiquidGlassNavigation() {
+  const { pathname } = useLocation();
   const targetRef = useRef<HTMLDivElement>(null);
+  const previousPathRef = useRef(pathname);
 
   useEffect(() => {
     const target = targetRef.current;
@@ -41,6 +46,23 @@ export function LiquidGlassNavigation() {
       console.error("Unable to initialize liquid glass navigation", error);
     });
   }, []);
+
+  useEffect(() => {
+    if (previousPathRef.current === pathname) {
+      return;
+    }
+
+    previousPathRef.current = pathname;
+    const target = targetRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    void refreshLiquidGlassSnapshot(target).catch((error: unknown) => {
+      console.error("Unable to refresh liquid glass navigation", error);
+    });
+  }, [pathname]);
 
   return (
     <div
