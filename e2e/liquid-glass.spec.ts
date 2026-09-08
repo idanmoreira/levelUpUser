@@ -19,6 +19,7 @@ type LiquidGlassWindow = Window & {
 
 const routes = [
   { heading: "Ideas, products, and active builds.", path: "/projects" },
+  { heading: "Simple tools for everyday tasks.", path: "/services" },
   { heading: "Privacy Policy", path: "/privacy" },
   { heading: "Terms of Service", path: "/terms" },
   { heading: "Page not found", path: "/missing-page" },
@@ -33,9 +34,7 @@ function recordRuntimeErrors(errors: string[]) {
   };
 }
 
-test("keeps one animated glass lens and refreshes it on every route", async ({
-  page,
-}) => {
+test("keeps one animated glass lens and refreshes it on every route", async ({ page }) => {
   const runtimeErrors: string[] = [];
   page.on("console", recordRuntimeErrors(runtimeErrors));
   page.on("pageerror", (error) => runtimeErrors.push(error.message));
@@ -52,8 +51,7 @@ test("keeps one animated glass lens and refreshes it on every route", async ({
       page.evaluate(() => {
         const renderer = (window as LiquidGlassWindow).__liquidGLRenderer__;
         return {
-          canvasCount: document.querySelectorAll("body > canvas[data-liquid-ignore]")
-            .length,
+          canvasCount: document.querySelectorAll("body > canvas[data-liquid-ignore]").length,
           lensCount: renderer?.lenses.length ?? 0,
           rendering: Boolean(renderer?._rafId),
         };
@@ -85,32 +83,25 @@ test("keeps one animated glass lens and refreshes it on every route", async ({
     }, route.path);
 
     await expect(page).toHaveURL(route.path);
-    await expect(page.getByRole("heading", { level: 1 })).toContainText(
-      route.heading,
-    );
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(route.heading);
     await expect(navigation).toBeVisible();
 
     await expect
       .poll(() =>
         page.evaluate(
-          () =>
-            (window as LiquidGlassWindow).__liquidGLRenderer__
-              ?.__testCaptureCount ?? 0,
+          () => (window as LiquidGlassWindow).__liquidGLRenderer__?.__testCaptureCount ?? 0,
         ),
       )
       .toBeGreaterThan(previousCaptureCount);
 
     previousCaptureCount = await page.evaluate(
-      () =>
-        (window as LiquidGlassWindow).__liquidGLRenderer__
-          ?.__testCaptureCount ?? 0,
+      () => (window as LiquidGlassWindow).__liquidGLRenderer__?.__testCaptureCount ?? 0,
     );
 
     const rendererState = await page.evaluate(() => {
       const renderer = (window as LiquidGlassWindow).__liquidGLRenderer__;
       return {
-        canvasCount: document.querySelectorAll("body > canvas[data-liquid-ignore]")
-          .length,
+        canvasCount: document.querySelectorAll("body > canvas[data-liquid-ignore]").length,
         lensCount: renderer?.lenses.length ?? 0,
       };
     });
@@ -123,36 +114,24 @@ test("keeps one animated glass lens and refreshes it on every route", async ({
   expect(runtimeErrors).toEqual([]);
 });
 
-test("disables reveal and specular animation when reduced motion is requested", async ({
-  page,
-}) => {
+test("does not initialize animation when reduced motion is requested", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.goto("/");
 
-  await expect(page.locator("#levelup-liquid-navigation")).toHaveCSS(
-    "opacity",
-    "1",
-  );
+  await expect(page.locator("#levelup-liquid-navigation")).toHaveCSS("opacity", "1");
 
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const lens = (window as LiquidGlassWindow).__liquidGLRenderer__?.lenses[0];
-        return lens
-          ? { reveal: lens.options.reveal, specular: lens.options.specular }
-          : null;
-      }),
-    )
-    .toEqual({ reveal: "none", specular: false });
+  const animationState = await page.evaluate(() => ({
+    canvasCount: document.querySelectorAll("body > canvas[data-liquid-ignore]").length,
+    hasRenderer: Boolean((window as LiquidGlassWindow).__liquidGLRenderer__),
+  }));
+
+  expect(animationState).toEqual({ canvasCount: 0, hasRenderer: false });
 });
 
 test("keeps navigation usable when WebGL is unavailable", async ({ page }) => {
   await page.addInitScript(() => {
     const getContext = HTMLCanvasElement.prototype.getContext;
-    HTMLCanvasElement.prototype.getContext = function (
-      contextId: string,
-      ...args: unknown[]
-    ) {
+    HTMLCanvasElement.prototype.getContext = function (contextId: string, ...args: unknown[]) {
       if (contextId.startsWith("webgl") || contextId === "experimental-webgl") {
         return null;
       }

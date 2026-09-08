@@ -9,6 +9,5 @@ export const routes = {
   privacy: "/privacy",
   terms: "/terms",
   projects: "/projects",
+  services: "/services",
 } as const;
-
-export type AppRoute = (typeof routes)[keyof typeof routes];

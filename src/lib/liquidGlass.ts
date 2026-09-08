@@ -8,24 +8,28 @@ type InitializeLiquidGlassOptions = {
   targetSelector: string;
 };
 
-function waitForNextPaint() {
+function waitForIdleTime() {
   return new Promise<void>((resolve) => {
-    window.requestAnimationFrame(() => resolve());
+    const requestIdleCallback = window.requestIdleCallback?.bind(window);
+
+    if (requestIdleCallback) {
+      requestIdleCallback(() => resolve(), { timeout: 2_000 });
+      return;
+    }
+
+    setTimeout(resolve, 1_500);
   });
 }
 
-async function waitForPageAssets() {
-  await waitForNextPaint();
+function shouldInitializeLiquidGlass() {
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const hasLimitedCpu = navigator.hardwareConcurrency > 0 && navigator.hardwareConcurrency <= 2;
 
-  if (document.fonts?.ready) {
-    await document.fonts.ready;
-  }
+  return !prefersReducedMotion && !hasLimitedCpu;
 }
 
 function createOptions(targetSelector: string): LiquidGLOptions {
-  const prefersReducedMotion = window.matchMedia(
-    "(prefers-reduced-motion: reduce)",
-  ).matches;
+  const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const isSmallViewport = window.matchMedia("(max-width: 767px)").matches;
 
   return {
@@ -52,11 +56,16 @@ function createOptions(targetSelector: string): LiquidGLOptions {
  * mounted for the lifetime of the app. The WeakSet also prevents React
  * StrictMode from creating a duplicate lens during development.
  */
-async function initializeTarget({
-  target,
-  targetSelector,
-}: InitializeLiquidGlassOptions) {
-  await waitForPageAssets();
+async function initializeTarget({ target, targetSelector }: InitializeLiquidGlassOptions) {
+  if (initializedTargets.has(target)) {
+    return;
+  }
+
+  if (!shouldInitializeLiquidGlass()) {
+    return;
+  }
+
+  await waitForIdleTime();
 
   if (!target.isConnected || initializedTargets.has(target)) {
     return;
@@ -72,9 +81,7 @@ async function initializeTarget({
   initializedTargets.add(target);
 }
 
-export async function initializeLiquidGlass(
-  options: InitializeLiquidGlassOptions,
-) {
+export async function initializeLiquidGlass(options: InitializeLiquidGlassOptions) {
   if (initializedTargets.has(options.target)) {
     return;
   }
@@ -115,7 +122,7 @@ export async function refreshLiquidGlassSnapshot(target: Element) {
     return;
   }
 
-  await waitForPageAssets();
+  await waitForIdleTime();
 
   if (!target.isConnected) {
     return;
